@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+__pycache__/
+.venv/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Secrets — never commit, any repo_access mode
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+credentials.json
+secrets/
+.secrets/
+*secret*
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# >>> framework-public-ignore
+# Uncomment these lines when repo_access=public or private-shared (see .claude/rules/commit-policy.md)
+.claude/
+CLAUDE.md
+manifest.md
+AGENTS.md
+experiments/
+drafts/
+scratch/
+test-results/
+playwright-report/
+coverage/
+*.log
+analysis/
+research/
+notes/
+data/
+dumps/
+fixtures/
+# <<< framework-public-ignore
+
+# Logs
+.claude/logs/
