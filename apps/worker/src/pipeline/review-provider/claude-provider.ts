@@ -25,6 +25,11 @@ export class ClaudeProvider implements ReviewProvider {
 
     // The review prompt's JSON schema intentionally omits `file` — the caller
     // attaches the real filename after this call, once per diff file.
-    return JSON.parse(text) as ReviewResult
+    const parsed = JSON.parse(text) as ReviewResult
+
+    return {
+      ...parsed,
+      usage: { inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens },
+    }
   }
 }

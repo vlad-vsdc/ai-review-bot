@@ -18,6 +18,13 @@ export class GroqProvider implements ReviewProvider {
       messages: [{ role: 'user', content: buildReviewPrompt(code, language) }],
     })
 
-    return JSON.parse(completion.choices[0]?.message?.content ?? '{}') as ReviewResult
+    const parsed = JSON.parse(completion.choices[0]?.message?.content ?? '{}') as ReviewResult
+
+    return {
+      ...parsed,
+      usage: completion.usage
+        ? { inputTokens: completion.usage.prompt_tokens, outputTokens: completion.usage.completion_tokens }
+        : undefined,
+    }
   }
 }

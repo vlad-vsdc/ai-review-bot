@@ -12,4 +12,5 @@ export interface Issue {
 export interface ReviewResult {
   issues: Issue[]
   summary: string
+  usage?: { inputTokens: number; outputTokens: number }
 }

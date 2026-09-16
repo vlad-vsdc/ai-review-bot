@@ -7,8 +7,9 @@ const files: DiffFile[] = [
   { filename: 'c.ts', patch: 'ok-c', status: 'ok' },
 ]
 
+const fetchPrDiffMock = vi.fn().mockResolvedValue(files)
 vi.mock('../src/pipeline/fetch-diff.js', () => ({
-  fetchPrDiff: vi.fn().mockResolvedValue(files),
+  fetchPrDiff: fetchPrDiffMock,
 }))
 
 vi.mock('../src/pipeline/review-provider/claude-provider.js', () => ({
@@ -29,13 +30,16 @@ vi.mock('../src/pipeline/review-provider/fallback-provider.js', () => ({
           summary: 'ok',
         })
       },
+      getUsageSummary: () => ({ inputTokens: 100, outputTokens: 50, providerUsed: 'claude' }),
     }
   }),
 }))
 
 const getCachedInstallationTokenMock = vi.fn().mockResolvedValue('fake-token')
+const recordReviewMock = vi.fn()
 vi.mock('@ai-review-bot/core', () => ({
   getCachedInstallationToken: getCachedInstallationTokenMock,
+  recordReview: recordReviewMock,
 }))
 
 const postReviewMock = vi.fn().mockResolvedValue({ postedComments: 2, unmappableIssues: 0 })
@@ -49,6 +53,9 @@ describe('processPrReviewJob', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+    fetchPrDiffMock.mockReset().mockResolvedValue(files)
+    recordReviewMock.mockReset()
+    postReviewMock.mockClear()
   })
 
   it('keeps issues from files that succeeded when another file review rejects', async () => {
@@ -77,5 +84,53 @@ describe('processPrReviewJob', () => {
         ['c.ts', 'ok-c'],
       ])
     )
+
+    expect(recordReviewMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoFullName: 'owner/repo',
+        prNumber: 1,
+        headSha: 'sha',
+        status: 'partial',
+        providerUsed: 'claude',
+        issuesFound: 2,
+        postedComments: 2,
+        unmappableIssues: 0,
+        skippedFilesCount: 1,
+        inputTokens: 100,
+        outputTokens: 50,
+        errorMessage: null,
+      })
+    )
+  })
+
+  it('records a failed review when the job throws before any review happens (e.g. fetch-diff)', async () => {
+    fetchPrDiffMock.mockRejectedValueOnce(new Error('GitHub API is down'))
+
+    await expect(
+      processPrReviewJob({
+        installationId: 1,
+        repoFullName: 'owner/repo',
+        prNumber: 9,
+        headSha: 'deadbeef',
+      })
+    ).rejects.toThrow('GitHub API is down')
+
+    expect(recordReviewMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoFullName: 'owner/repo',
+        prNumber: 9,
+        headSha: 'deadbeef',
+        status: 'failed',
+        providerUsed: null,
+        issuesFound: 0,
+        postedComments: 0,
+        unmappableIssues: 0,
+        skippedFilesCount: 0,
+        inputTokens: null,
+        outputTokens: null,
+        errorMessage: 'GitHub API is down',
+      })
+    )
+    expect(postReviewMock).not.toHaveBeenCalled()
   })
 })
