@@ -1,3 +1,5 @@
 export * from './types.js'
 export * from './prompts/review-prompt.js'
 export * from './github-app-auth.js'
+export * from './queue/connection.js'
+export * from './queue/pr-review.queue.js'

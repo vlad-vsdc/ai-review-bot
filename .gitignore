@@ -28,11 +28,14 @@ CLAUDE.local.md
 *.sqlite3
 
 # >>> framework-public-ignore
-# Uncomment these lines when repo_access=public or private-shared (see .claude/rules/commit-policy.md)
+# repo_access=public (manifest.md) — framework/process files stay local, only product ships
 .claude/
 CLAUDE.md
 manifest.md
 AGENTS.md
+init-project.sh
+methodology/
+scripts/
 experiments/
 drafts/
 scratch/

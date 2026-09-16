@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify'
+import { prReviewQueue, redisConnection } from '@ai-review-bot/core'
 import { verifySignature } from '../verify-signature.js'
+import { shouldThrottle } from '../throttle.js'
 
 const HANDLED_ACTIONS = new Set(['opened', 'synchronize'])
 
@@ -29,12 +31,19 @@ export async function githubWebhookRoute(app: FastifyInstance): Promise<void> {
       return reply.code(200).send()
     }
 
-    console.log({
-      repo: payload.repository.full_name,
-      pr: payload.pull_request.number,
-      action: payload.action,
-      sha: payload.pull_request.head.sha,
-    })
+    const installationId = payload.installation.id
+    const repoFullName = payload.repository.full_name
+    const prNumber = payload.pull_request.number
+    const headSha = payload.pull_request.head.sha
+
+    const throttleMinutes = Number(process.env.REVIEW_THROTTLE_MINUTES) || 5
+
+    if (await shouldThrottle(redisConnection, repoFullName, prNumber, throttleMinutes)) {
+      app.log.info({ repo: repoFullName, pr: prNumber }, 'review throttled')
+      return reply.code(200).send()
+    }
+
+    await prReviewQueue.add('review', { installationId, repoFullName, prNumber, headSha })
 
     return reply.code(200).send()
   })

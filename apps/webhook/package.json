@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ai-review-bot/core": "^0.0.1",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.0"
   }
