@@ -1,9 +1,11 @@
 import pLimit from 'p-limit'
 import type { Issue, PrReviewJobData } from '@ai-review-bot/core'
+import { getCachedInstallationToken } from '@ai-review-bot/core'
 import { fetchPrDiff } from '../pipeline/fetch-diff.js'
 import { ClaudeProvider } from '../pipeline/review-provider/claude-provider.js'
 import { GroqProvider } from '../pipeline/review-provider/groq-provider.js'
 import { FallbackReviewProvider } from '../pipeline/review-provider/fallback-provider.js'
+import { postReview } from '../pipeline/post-review.js'
 
 const MAX_CONCURRENT_REVIEWS = 3
 
@@ -26,10 +28,12 @@ function detectLanguage(filename: string): string {
 
 export async function processPrReviewJob(data: PrReviewJobData): Promise<PrReviewOutcome> {
   const [owner, repo] = data.repoFullName.split('/')
+  const appId = process.env.GITHUB_APP_ID!
+  const privateKeyPath = process.env.GITHUB_PRIVATE_KEY_PATH!
 
   const diffFiles = await fetchPrDiff({
-    appId: process.env.GITHUB_APP_ID!,
-    privateKeyPath: process.env.GITHUB_PRIVATE_KEY_PATH!,
+    appId,
+    privateKeyPath,
     installationId: data.installationId,
     owner,
     repo,
@@ -75,6 +79,18 @@ export async function processPrReviewJob(data: PrReviewJobData): Promise<PrRevie
     skippedFiles,
   }
 
+  const filePatches = new Map(reviewableFiles.map((file) => [file.filename, file.patch!]))
+  const installationToken = await getCachedInstallationToken(appId, privateKeyPath, data.installationId)
+  const postResult = await postReview(
+    installationToken,
+    owner,
+    repo,
+    data.prNumber,
+    data.headSha,
+    result,
+    filePatches
+  )
+
   console.log({
     repo: data.repoFullName,
     pr: data.prNumber,
@@ -82,6 +98,8 @@ export async function processPrReviewJob(data: PrReviewJobData): Promise<PrRevie
     reviewedFiles: result.reviewedFiles,
     skippedFiles,
     issues,
+    postedComments: postResult.postedComments,
+    unmappableIssues: postResult.unmappableIssues,
   })
 
   return result

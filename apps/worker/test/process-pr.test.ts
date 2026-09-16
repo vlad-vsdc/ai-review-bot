@@ -33,6 +33,16 @@ vi.mock('../src/pipeline/review-provider/fallback-provider.js', () => ({
   }),
 }))
 
+const getCachedInstallationTokenMock = vi.fn().mockResolvedValue('fake-token')
+vi.mock('@ai-review-bot/core', () => ({
+  getCachedInstallationToken: getCachedInstallationTokenMock,
+}))
+
+const postReviewMock = vi.fn().mockResolvedValue({ postedComments: 2, unmappableIssues: 0 })
+vi.mock('../src/pipeline/post-review.js', () => ({
+  postReview: postReviewMock,
+}))
+
 const { processPrReviewJob } = await import('../src/jobs/process-pr.js')
 
 describe('processPrReviewJob', () => {
@@ -53,5 +63,19 @@ describe('processPrReviewJob', () => {
     expect(result.issues.map((issue) => issue.file)).toEqual(['a.ts', 'c.ts'])
     expect(result.reviewedFiles).toBe(2)
     expect(result.skippedFiles).toEqual([{ file: 'b.ts', reason: 'review failed' }])
+
+    expect(postReviewMock).toHaveBeenCalledWith(
+      'fake-token',
+      'owner',
+      'repo',
+      1,
+      'sha',
+      result,
+      new Map([
+        ['a.ts', 'ok-a'],
+        ['b.ts', 'FAIL'],
+        ['c.ts', 'ok-c'],
+      ])
+    )
   })
 })
