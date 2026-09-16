@@ -1,8 +1,15 @@
 import 'dotenv/config'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
 import Fastify from 'fastify'
+import { initDb } from '@ai-review-bot/core'
 import { githubWebhookRoute } from './routes/github-webhook.js'
+import { statsRoute } from './routes/stats.js'
 
 const PORT = Number(process.env.PORT) || 3000
+// Same physical file as apps/worker's default (packages/core/src/db writes there) —
+// webhook only reads it, the worker is the sole writer.
+const DEFAULT_DB_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../worker/data/reviews.db')
 
 export function buildServer() {
   const app = Fastify({ logger: true })
@@ -15,11 +22,14 @@ export function buildServer() {
   })
 
   app.register(githubWebhookRoute)
+  app.register(statsRoute)
 
   return app
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  initDb(process.env.REVIEWS_DB_PATH ?? DEFAULT_DB_PATH)
+
   const app = buildServer()
 
   app.listen({ port: PORT, host: '0.0.0.0' }, (err) => {

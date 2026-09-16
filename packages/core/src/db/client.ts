@@ -1,7 +1,13 @@
 import Database from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { CREATE_PR_REVIEWS_TABLE, type NewPrReview, type PrReviewRecord } from './schema.js'
+import {
+  CREATE_PR_REVIEWS_TABLE,
+  type NewPrReview,
+  type PrReviewRecord,
+  type ProviderUsed,
+  type ReviewStatus,
+} from './schema.js'
 
 let db: Database.Database | null = null
 
@@ -54,4 +60,106 @@ export function listReviews(): PrReviewRecord[] {
     createdAt: row.created_at as string,
     errorMessage: row.error_message as string | null,
   }))
+}
+
+const STATUSES: ReviewStatus[] = ['success', 'failed', 'partial']
+const PROVIDERS: ProviderUsed[] = ['claude', 'groq', 'mixed']
+
+export interface RecentReview {
+  repoFullName: string
+  prNumber: number
+  status: ReviewStatus
+  providerUsed: ProviderUsed | null
+  issuesFound: number
+  postedComments: number
+  createdAt: string
+}
+
+export interface StatsSummary {
+  totalReviews: number
+  byStatus: Record<ReviewStatus, number>
+  byProvider: Record<ProviderUsed, number>
+  totalIssuesFound: number
+  totalPostedComments: number
+  totalUnmappableIssues: number
+  totalInputTokens: number | null
+  totalOutputTokens: number | null
+  avgDurationMs: number | null
+  recentReviews: RecentReview[]
+}
+
+export function getStats(): StatsSummary {
+  const database = requireDb()
+
+  const { totalReviews } = database.prepare('SELECT COUNT(*) as totalReviews FROM pr_reviews').get() as {
+    totalReviews: number
+  }
+
+  const byStatus = Object.fromEntries(STATUSES.map((status) => [status, 0])) as Record<ReviewStatus, number>
+  for (const row of database.prepare('SELECT status, COUNT(*) as count FROM pr_reviews GROUP BY status').all() as Array<{
+    status: ReviewStatus
+    count: number
+  }>) {
+    byStatus[row.status] = row.count
+  }
+
+  const byProvider = Object.fromEntries(PROVIDERS.map((provider) => [provider, 0])) as Record<ProviderUsed, number>
+  for (const row of database
+    .prepare('SELECT provider_used, COUNT(*) as count FROM pr_reviews WHERE provider_used IS NOT NULL GROUP BY provider_used')
+    .all() as Array<{ provider_used: ProviderUsed; count: number }>) {
+    byProvider[row.provider_used] = row.count
+  }
+
+  // SUM() over a column that is entirely NULL (or over zero rows) returns NULL in SQLite,
+  // which is exactly the "no usage data available" signal we want to surface as null.
+  const totals = database
+    .prepare(
+      `SELECT
+        COALESCE(SUM(issues_found), 0) as totalIssuesFound,
+        COALESCE(SUM(posted_comments), 0) as totalPostedComments,
+        COALESCE(SUM(unmappable_issues), 0) as totalUnmappableIssues,
+        SUM(input_tokens) as totalInputTokens,
+        SUM(output_tokens) as totalOutputTokens,
+        AVG(duration_ms) as avgDurationMs
+      FROM pr_reviews`
+    )
+    .get() as {
+    totalIssuesFound: number
+    totalPostedComments: number
+    totalUnmappableIssues: number
+    totalInputTokens: number | null
+    totalOutputTokens: number | null
+    avgDurationMs: number | null
+  }
+
+  const recentRows = database
+    .prepare(
+      `SELECT repo_full_name, pr_number, status, provider_used, issues_found, posted_comments, created_at
+       FROM pr_reviews ORDER BY id DESC LIMIT 10`
+    )
+    .all() as Array<{
+    repo_full_name: string
+    pr_number: number
+    status: ReviewStatus
+    provider_used: ProviderUsed | null
+    issues_found: number
+    posted_comments: number
+    created_at: string
+  }>
+
+  return {
+    totalReviews,
+    byStatus,
+    byProvider,
+    ...totals,
+    recentReviews: recentRows.map((row) => ({
+      repoFullName: row.repo_full_name,
+      prNumber: row.pr_number,
+      status: row.status,
+      providerUsed: row.provider_used,
+      issuesFound: row.issues_found,
+      postedComments: row.posted_comments,
+      createdAt: row.created_at,
+    })),
+  }
 }
