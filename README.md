@@ -95,7 +95,15 @@ Real PR in this repository reviewed and commented on by the bot:
   time) and every file fell back to Groq — a real fallback path exercised
   live, not simulated in a test.
 
-<!-- TODO: screenshot from a demo PR showing inline comments -->
+The bot reviewing its own repository — real inline comments on a real PR
+([#6](https://github.com/vlad-vsdc/ai-review-bot/pull/6)):
+
+![Review summary and inline comments](./docs/screenshots/review-comments-1.png)
+
+Beyond flagging issues, the bot also acknowledges good patterns —
+not just a linter with opinions:
+
+![Positive feedback example](./docs/screenshots/review-comments-2.png)
 
 Actual response from `GET /stats` on the running instance:
 
