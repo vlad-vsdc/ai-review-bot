@@ -24,3 +24,5 @@ export function buildWorker() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   buildWorker()
 }
+
+// stats seed trigger
